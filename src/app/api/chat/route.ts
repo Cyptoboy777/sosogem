@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { GEMINI_SYSTEM_INSTRUCTION, getMockResearchResponse } from '@/lib/gemini';
+import { GEMINI_SYSTEM_INSTRUCTION, GEMINI_TOOLS } from '@/lib/gemini';
 import { SoSoValueClient } from '@/lib/sosovalue';
 import { SoDEXClient } from '@/lib/sodex';
 
@@ -8,7 +8,6 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { messages } = body;
-    const query = messages[messages.length - 1]?.content || '';
 
     // Get keys from headers or environment variables
     const geminiKey = req.headers.get('x-gemini-key') || process.env.GEMINI_API_KEY || '';
@@ -35,24 +34,91 @@ A Google Gemini API key is required to query live metrics and generate AI-driven
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       systemInstruction: GEMINI_SYSTEM_INSTRUCTION,
+      tools: GEMINI_TOOLS as any
     });
 
     // Prepare history format for Gemini
-    const contents = messages.map((m: any) => ({
+    let contents = messages.map((m: any) => ({
       role: m.role === 'user' ? 'user' : 'model',
       parts: [{ text: m.content }],
     }));
 
-    const result = await model.generateContent({
+    let result = await model.generateContent({
       contents,
     });
 
-    const response = await result.response;
-    const responseText = response.text();
+    let response = await result.response;
+    let functionCalls = response.functionCalls() || [];
+
+    if (functionCalls.length > 0) {
+      const functionResponseParts = [];
+
+      for (const call of functionCalls) {
+        const { name, args } = call;
+        let data: any = null;
+        try {
+          if (name === 'get_market_statistics') {
+            data = await sosoClient.getMarketStats();
+          } else if (name === 'get_crypto_news') {
+            data = await sosoClient.getNews();
+          } else if (name === 'get_coin_details') {
+            data = await sosoClient.getCoins();
+          } else if (name === 'get_account_balances') {
+            data = await sodexClient.getBalances();
+          } else if (name === 'get_active_perp_positions') {
+            data = await sodexClient.getPositions();
+          } else if (name === 'execute_trade') {
+            const tradeArgs = args as any;
+            if (tradeArgs.type === 'PERP') {
+              data = await sodexClient.placePerpOrder(tradeArgs);
+            } else {
+              data = await sodexClient.placeSpotOrder(tradeArgs);
+            }
+          }
+        } catch (err: any) {
+          console.error(`Error executing tool ${name}:`, err);
+          data = { error: err.message || 'Tool execution failed' };
+        }
+
+        functionResponseParts.push({
+          functionResponse: {
+            name,
+            response: { result: data }
+          }
+        });
+      }
+
+      // Append model parts containing functionCalls
+      const modelParts = functionCalls.map((c: any) => ({
+        functionCall: c
+      }));
+
+      contents.push({
+        role: 'model',
+        parts: modelParts
+      });
+
+      // Append function response parts
+      contents.push({
+        role: 'function',
+        parts: functionResponseParts
+      });
+
+      // Generate content again with function results
+      const finalResult = await model.generateContent({
+        contents
+      });
+
+      const finalResponse = await finalResult.response;
+      return NextResponse.json({
+        role: 'model',
+        content: finalResponse.text(),
+      });
+    }
 
     return NextResponse.json({
       role: 'model',
-      content: responseText,
+      content: response.text(),
     });
   } catch (error: any) {
     console.error('Gemini Route Error:', error);

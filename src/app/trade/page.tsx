@@ -16,12 +16,13 @@ import {
 } from 'lucide-react';
 import { useSettings, useWallet } from '@/components/Providers';
 import { SoDEXClient } from '@/lib/sodex';
+import { SoSoValueClient } from '@/lib/sosovalue';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { cn, formatCurrency, formatPercent } from '@/lib/utils';
-import { AssetPosition } from '@/types';
+import { AssetPosition, CoinData } from '@/types';
 import { ApiKeyWarning } from '@/components/ApiKeyWarning';
 
 // Mock chart data points for visual plotting
@@ -36,7 +37,7 @@ export default function Trade() {
   const { isConnected, address } = useWallet();
   const { toast } = useToast();
 
-  const [activeAsset, setActiveAsset] = React.useState<'BTC' | 'ETH' | 'SOL'>('BTC');
+  const [activeAsset, setActiveAsset] = React.useState<string>('BTC');
   const [tradeType, setTradeType] = React.useState<'SPOT' | 'PERP'>('SPOT');
   const [side, setSide] = React.useState<'BUY' | 'SELL'>('BUY');
   const [orderType, setOrderType] = React.useState<'market' | 'limit'>('limit');
@@ -45,34 +46,81 @@ export default function Trade() {
   const [leverage, setLeverage] = React.useState(5);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
+  // Live SoSoValue coins list
+  const [liveCoins, setLiveCoins] = React.useState<CoinData[]>([]);
+
   // Stateful position management
   const [positions, setPositions] = React.useState<AssetPosition[]>([]);
   const [tradeHistory, setTradeHistory] = React.useState<any[]>([]);
   const [balances, setBalances] = React.useState<any>(null);
+
+  const sosoClient = React.useMemo(() => 
+    new SoSoValueClient(settings.sosoValueApiKey), 
+    [settings.sosoValueApiKey]
+  );
 
   const sodexClient = React.useMemo(() => 
     new SoDEXClient(settings.sodexApiKey, settings.sodexSecretKey),
     [settings.sodexApiKey, settings.sodexSecretKey]
   );
 
-  if ((!settings.sodexApiKey || !settings.sodexSecretKey) && !settings.sodexSet) {
-    return (
-      <ApiKeyWarning 
-        title="SoDEX API Keys Required"
-        description="Active SoDEX API keys and secret signatures are required to route custom orders, place spot trades, and manage perpetual margin contracts. Please configure them to continue."
-      />
-    );
-  }
+  // Retrieve dynamic list of tokens from balance assets + default tokens
+  const tradableAssets = React.useMemo(() => {
+    const defaultAssets = ['BTC', 'ETH', 'SOL'];
+    if (liveCoins.length > 0) {
+      const liveSymbols = liveCoins.map(c => c.symbol);
+      return Array.from(new Set([...defaultAssets, ...liveSymbols]));
+    }
+    if (balances && balances.assets) {
+      const symbols = balances.assets.map((a: any) => a.symbol);
+      return Array.from(new Set([...defaultAssets, ...symbols]));
+    }
+    return defaultAssets;
+  }, [balances, liveCoins]);
 
-  // Sync pricing inputs
+  // Sync pricing inputs using live prices scaled dynamically
+  const activeAssetChartData = React.useMemo(() => {
+    const liveCoin = liveCoins.find(c => c.symbol === activeAsset);
+    const mockBase = HISTORICAL_CHART_DATA[activeAsset] || [1, 1.02, 0.99, 1.01, 1.05, 1.03, 1.07, 1.06, 1.09, 1.08];
+    if (liveCoin) {
+      const currentVal = liveCoin.price;
+      const baseMax = Math.max(...mockBase);
+      const scaled = mockBase.map(v => (v / baseMax) * currentVal);
+      scaled[scaled.length - 1] = currentVal;
+      return scaled;
+    }
+    return mockBase;
+  }, [activeAsset, liveCoins]);
+
   const currentAssetPrice = React.useMemo(() => {
-    const data = HISTORICAL_CHART_DATA[activeAsset];
-    return data ? data[data.length - 1] : 0;
-  }, [activeAsset]);
+    return activeAssetChartData[activeAssetChartData.length - 1] || 0;
+  }, [activeAssetChartData]);
 
+  // Synchronize price input
   React.useEffect(() => {
     setPriceInput(currentAssetPrice.toString());
   }, [currentAssetPrice]);
+
+  // Load live coins data from SoSoValue
+  React.useEffect(() => {
+    let active = true;
+    async function loadLiveCoins() {
+      try {
+        const data = await sosoClient.getCoins();
+        if (active) {
+          setLiveCoins(data);
+        }
+      } catch (err) {
+        console.error('Failed to load live coins in Trade:', err);
+      }
+    }
+    loadLiveCoins();
+    const interval = setInterval(loadLiveCoins, 10000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [sosoClient]);
 
   // Load account data
   const loadAccountData = React.useCallback(async () => {
@@ -95,6 +143,15 @@ export default function Trade() {
     const interval = setInterval(loadAccountData, 5000);
     return () => clearInterval(interval);
   }, [loadAccountData]);
+
+  if ((!settings.sodexApiKey || !settings.sodexSecretKey) && !settings.sodexSet) {
+    return (
+      <ApiKeyWarning 
+        title="SoDEX API Keys Required"
+        description="Active SoDEX API keys and secret signatures are required to route custom orders, place spot trades, and manage perpetual margin contracts. Please configure them to continue."
+      />
+    );
+  }
 
   // Place trade
   const handlePlaceOrder = async () => {
@@ -200,16 +257,27 @@ export default function Trade() {
     <div className="space-y-6 pt-4 pb-12">
       {/* Active Tickers Header Row */}
       <div className="flex flex-wrap items-center gap-3 border-b border-white/5 pb-4">
-        {['BTC', 'ETH', 'SOL'].map((symbol) => {
+        {tradableAssets.map((symbol) => {
           const isActive = activeAsset === symbol;
-          const data = HISTORICAL_CHART_DATA[symbol];
-          const price = data[data.length - 1];
-          const prev = data[data.length - 2];
-          const change = ((price - prev) / prev) * 100;
+          
+          const liveCoin = liveCoins.find(c => c.symbol === symbol);
+          let price = 0;
+          let change = 0;
+
+          if (liveCoin) {
+            price = liveCoin.price;
+            change = liveCoin.change24h;
+          } else {
+            const data = HISTORICAL_CHART_DATA[symbol] || [1, 1.05];
+            price = data[data.length - 1];
+            const prev = data[data.length - 2] || price;
+            change = ((price - prev) / prev) * 100;
+          }
+
           return (
             <button
               key={symbol}
-              onClick={() => setActiveAsset(symbol as any)}
+              onClick={() => setActiveAsset(symbol)}
               className={cn(
                 "flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all text-left cursor-pointer",
                 isActive 
@@ -411,11 +479,11 @@ export default function Trade() {
                 
                 {/* Area under curve */}
                 <path
-                  d={`M0,200 ${HISTORICAL_CHART_DATA[activeAsset].map((val, idx) => {
-                    const min = Math.min(...HISTORICAL_CHART_DATA[activeAsset]);
-                    const max = Math.max(...HISTORICAL_CHART_DATA[activeAsset]);
+                  d={`M0,200 ${activeAssetChartData.map((val, idx) => {
+                    const min = Math.min(...activeAssetChartData);
+                    const max = Math.max(...activeAssetChartData);
                     const range = max - min || 1;
-                    const x = (idx / (HISTORICAL_CHART_DATA[activeAsset].length - 1)) * 500;
+                    const x = (idx / (activeAssetChartData.length - 1)) * 500;
                     const y = 160 - ((val - min) / range) * 120;
                     return `L${x},${y}`;
                   }).join(' ')} L500,200 Z`}
@@ -427,18 +495,18 @@ export default function Trade() {
                   fill="none"
                   stroke="#8b5cf6"
                   strokeWidth="2"
-                  points={HISTORICAL_CHART_DATA[activeAsset].map((val, idx) => {
-                    const min = Math.min(...HISTORICAL_CHART_DATA[activeAsset]);
-                    const max = Math.max(...HISTORICAL_CHART_DATA[activeAsset]);
+                  points={activeAssetChartData.map((val, idx) => {
+                    const min = Math.min(...activeAssetChartData);
+                    const max = Math.max(...activeAssetChartData);
                     const range = max - min || 1;
-                    const x = (idx / (HISTORICAL_CHART_DATA[activeAsset].length - 1)) * 500; // factor
+                    const x = (idx / (activeAssetChartData.length - 1)) * 500; // factor
                     const y = 160 - ((val - min) / range) * 120;
                     return `${x},${y}`;
                   }).join(' ')}
                 />
 
                 {/* Draw price dots */}
-                {HISTORICAL_CHART_DATA[activeAsset].map((val, idx, arr) => {
+                {activeAssetChartData.map((val, idx, arr) => {
                   if (idx !== arr.length - 1) return null;
                   const min = Math.min(...arr);
                   const max = Math.max(...arr);
