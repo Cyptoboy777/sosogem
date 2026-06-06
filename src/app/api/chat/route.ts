@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { GEMINI_SYSTEM_INSTRUCTION, GEMINI_TOOLS } from '@/lib/gemini';
 import { SoSoValueClient } from '@/lib/sosovalue';
-import { SoDEXClient } from '@/lib/sodex';
+import { SodexSDK } from '@/lib/sodex';
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     const sandbox = !geminiKey;
 
     const sosoClient = new SoSoValueClient(sosoKey);
-    const sodexClient = new SoDEXClient(sodexKey, sodexSecret);
+    const sodexClient = new SodexSDK(sodexKey, sodexSecret);
 
     if (sandbox) {
       return NextResponse.json({

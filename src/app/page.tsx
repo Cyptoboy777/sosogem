@@ -15,7 +15,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { SoSoValueClient } from '@/lib/sosovalue';
-import { SoDEXClient } from '@/lib/sodex';
+import { SodexSDK } from '@/lib/sodex';
 import { useSettings, useWallet } from '@/components/Providers';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,7 @@ export default function Dashboard() {
   );
 
   const sodexClient = React.useMemo(() => 
-    new SoDEXClient(settings.sodexApiKey, settings.sodexSecretKey), 
+    new SodexSDK(settings.sodexApiKey, settings.sodexSecretKey), 
     [settings.sodexApiKey, settings.sodexSecretKey]
   );
 

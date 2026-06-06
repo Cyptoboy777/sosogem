@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { SoSoValueClient } from './sosovalue';
-import { SoDEXClient } from './sodex';
+import { SodexSDK } from './sodex';
 
 export const GEMINI_SYSTEM_INSTRUCTION = `
 You are "SosuGem Alpha", an elite, institutional-grade AI crypto research analyst and autonomous portfolio guardian designed for the SoSoValue Buildathon.
@@ -71,7 +71,7 @@ export const GEMINI_TOOLS = [
 ];
 
 // High fidelity simulator for sandbox responses
-export function getMockResearchResponse(query: string, soso: SoSoValueClient, sodex: SoDEXClient): string {
+export function getMockResearchResponse(query: string, soso: SoSoValueClient, sodex: SodexSDK): string {
   const q = query.toLowerCase();
 
   if (q.includes('solana') || q.includes('sol') || q.includes('memecoin')) {

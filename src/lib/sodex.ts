@@ -3,7 +3,7 @@ import { AssetPosition, PortfolioAsset } from '@/types';
 const SODEX_SPOT_URL = 'https://mainnet-gw.sodex.dev/api/v1/spot';
 const SODEX_PERPS_URL = 'https://mainnet-gw.sodex.dev/api/v1/perps';
 
-export class SoDEXClient {
+export class SodexSDK {
   private apiKey: string;
   private secretKey: string;
 

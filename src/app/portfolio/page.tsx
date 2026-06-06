@@ -13,7 +13,7 @@ import {
   Coins
 } from 'lucide-react';
 import { useSettings, useWallet } from '@/components/Providers';
-import { SoDEXClient } from '@/lib/sodex';
+import { SodexSDK } from '@/lib/sodex';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn, formatCurrency, formatPercent } from '@/lib/utils';
@@ -27,7 +27,7 @@ export default function Portfolio() {
   const [loading, setLoading] = React.useState(true);
 
   const sodexClient = React.useMemo(() => 
-    new SoDEXClient(settings.sodexApiKey, settings.sodexSecretKey),
+    new SodexSDK(settings.sodexApiKey, settings.sodexSecretKey),
     [settings.sodexApiKey, settings.sodexSecretKey]
   );
 

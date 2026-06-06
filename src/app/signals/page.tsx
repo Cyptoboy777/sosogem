@@ -13,7 +13,7 @@ import {
   Key
 } from 'lucide-react';
 import { useSettings, useWallet } from '@/components/Providers';
-import { SoDEXClient } from '@/lib/sodex';
+import { SodexSDK } from '@/lib/sodex';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -94,7 +94,7 @@ export default function Signals() {
   const [executionSize, setExecutionSize] = React.useState(0.5); // size factor (0.5 BTC, etc.)
 
   const sodexClient = React.useMemo(() => 
-    new SoDEXClient(settings.sodexApiKey, settings.sodexSecretKey),
+    new SodexSDK(settings.sodexApiKey, settings.sodexSecretKey),
     [settings.sodexApiKey, settings.sodexSecretKey]
   );
 
