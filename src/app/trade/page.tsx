@@ -64,19 +64,10 @@ export default function Trade() {
     [settings.sodexApiKey, settings.sodexSecretKey]
   );
 
-  // Retrieve dynamic list of tokens from balance assets + default tokens
+  // Retrieve dynamic list of tokens strictly matching SoDEX supported assets
   const tradableAssets = React.useMemo(() => {
-    const defaultAssets = ['BTC', 'ETH', 'SOL'];
-    if (liveCoins.length > 0) {
-      const liveSymbols = liveCoins.map(c => c.symbol);
-      return Array.from(new Set([...defaultAssets, ...liveSymbols]));
-    }
-    if (balances && balances.assets) {
-      const symbols = balances.assets.map((a: any) => a.symbol);
-      return Array.from(new Set([...defaultAssets, ...symbols]));
-    }
-    return defaultAssets;
-  }, [balances, liveCoins]);
+    return ['BTC', 'ETH', 'SOL'];
+  }, []);
 
   // Sync pricing inputs using live prices scaled dynamically
   const activeAssetChartData = React.useMemo(() => {

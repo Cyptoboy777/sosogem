@@ -1,17 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const MOCK_STATS = {
-  btcPrice: 68650,
-  btcChange24h: 3.42,
-  ethPrice: 3792,
-  ethChange24h: 2.15,
-  solPrice: 179.8,
-  solChange24h: 8.76,
-  totalMarketCap: 2540000000000,
-  marketCapChange24h: 2.85,
-  etfNetInflow: 242300000,
-  etfEthInflow: 48900000
-};
+async function getLiveBinancePrices() {
+  try {
+    const res = await fetch('https://api.binance.com/api/v3/ticker/price');
+    if (!res.ok) throw new Error('Binance price fetch failed');
+    const data = await res.json();
+    const btc = data.find((item: any) => item.symbol === 'BTCUSDT');
+    const eth = data.find((item: any) => item.symbol === 'ETHUSDT');
+    const sol = data.find((item: any) => item.symbol === 'SOLUSDT');
+    return {
+      BTC: btc ? parseFloat(btc.price) : 68650,
+      ETH: eth ? parseFloat(eth.price) : 3792,
+      SOL: sol ? parseFloat(sol.price) : 179.8
+    };
+  } catch (error) {
+    console.error('Failed to fetch live prices from Binance:', error);
+    return {
+      BTC: 68650,
+      ETH: 3792,
+      SOL: 179.8
+    };
+  }
+}
 
 export async function GET(req: NextRequest) {
   let auth = req.headers.get('Authorization') || '';
@@ -24,6 +34,20 @@ export async function GET(req: NextRequest) {
   }
 
   const isPlaceholder = !apiKey || apiKey === 'your_sosovalue_api_key_here' || apiKey === 'your_sosovalue_api_key';
+  const livePrices = await getLiveBinancePrices();
+
+  const MOCK_STATS = {
+    btcPrice: livePrices.BTC,
+    btcChange24h: 3.42,
+    ethPrice: livePrices.ETH,
+    ethChange24h: 2.15,
+    solPrice: livePrices.SOL,
+    solChange24h: 8.76,
+    totalMarketCap: 2540000000000,
+    marketCapChange24h: 2.85,
+    etfNetInflow: 242300000,
+    etfEthInflow: 48900000
+  };
 
   if (isPlaceholder) {
     return NextResponse.json(MOCK_STATS);

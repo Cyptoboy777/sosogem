@@ -1,20 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const MOCK_POSITIONS = [
-  {
-    id: 'pos-01',
-    symbol: 'SOL',
-    type: 'PERP',
-    side: 'LONG',
-    entryPrice: 172.50,
-    markPrice: 179.80,
-    size: 10,
-    value: 1798.00,
-    pnl: 73.00,
-    pnlPercent: 4.23,
-    leverage: 5
+async function getLiveBinancePrices() {
+  try {
+    const res = await fetch('https://api.binance.com/api/v3/ticker/price');
+    if (!res.ok) throw new Error('Binance price fetch failed');
+    const data = await res.json();
+    const btc = data.find((item: any) => item.symbol === 'BTCUSDT');
+    const eth = data.find((item: any) => item.symbol === 'ETHUSDT');
+    const sol = data.find((item: any) => item.symbol === 'SOLUSDT');
+    return {
+      BTC: btc ? parseFloat(btc.price) : 68650,
+      ETH: eth ? parseFloat(eth.price) : 3792,
+      SOL: sol ? parseFloat(sol.price) : 179.8
+    };
+  } catch (error) {
+    console.error('Failed to fetch live prices from Binance:', error);
+    return {
+      BTC: 68650,
+      ETH: 3792,
+      SOL: 179.8
+    };
   }
-];
+}
 
 export async function GET(req: NextRequest) {
   const apiKey = req.headers.get('X-API-Key') || process.env.SODEX_API_KEY || '';
@@ -22,6 +29,29 @@ export async function GET(req: NextRequest) {
   const sign = req.headers.get('X-API-Sign') || '0x01mockedsignature...';
 
   const isPlaceholder = !apiKey || apiKey === 'your_sodex_api_key_here' || apiKey === 'your_sodex_api_key';
+  const livePrices = await getLiveBinancePrices();
+
+  const entryPrice = 172.50;
+  const markPrice = livePrices.SOL;
+  const size = 10;
+  const pnl = (markPrice - entryPrice) * size;
+  const pnlPercent = (pnl / (entryPrice * size)) * 100;
+
+  const MOCK_POSITIONS = [
+    {
+      id: 'pos-01',
+      symbol: 'SOL',
+      type: 'PERP',
+      side: 'LONG',
+      entryPrice,
+      markPrice,
+      size,
+      value: markPrice * size,
+      pnl,
+      pnlPercent,
+      leverage: 5
+    }
+  ];
 
   if (isPlaceholder) {
     return NextResponse.json(MOCK_POSITIONS);
