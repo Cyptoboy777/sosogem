@@ -1,5 +1,7 @@
 # 🪐 About SosuGem Alpha
 
+**Live Deployment:** [sosogem.vercel.app/trade](https://sosogem.vercel.app/trade)
+
 **SosuGem Alpha** is an institutional-grade, AI-driven crypto research and autonomous trading terminal custom-built for the **SoSoValue Buildathon Wave 2**. The platform consolidates premium financial indexes, real-time market stats, and on-chain news details, allowing users to perform AI-driven research, obtain smart signals, execute spot/perp orders, and manage portfolio allocations within a single premium dashboard.
 
 ---

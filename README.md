@@ -4,6 +4,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS-v4.0-06B6D4?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
 [![Gemini 2.5](https://img.shields.io/badge/Gemini_2.5_Flash-AI_Agent-8E44AD?style=for-the-badge&logo=google-gemini)](https://aistudio.google.com/)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Vercel-000000?style=for-the-badge&logo=vercel)](https://sosogem.vercel.app/trade)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 **SosuGem Alpha** (formerly SosuGemini) is a premium, production-ready, AI-powered crypto research and autonomous trading terminal custom-built for the **SoSoValue Buildathon Wave 2**. It consolidates institutional research data feeds from SoSoValue, formulates real-time market risk analysis profiles with Google Gemini 2.5 Flash using active function-calling loops, and routes signed spot/perp orders via the secure **SodexSDK**.
