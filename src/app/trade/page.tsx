@@ -105,6 +105,9 @@ export default function Trade() {
   React.useEffect(() => {
     let active = true;
     async function loadLiveCoins() {
+      if (!settings.sosoValueApiKey && !settings.sosoSet) {
+        return;
+      }
       try {
         const data = await sosoClient.getCoins();
         if (active) {
@@ -120,10 +123,13 @@ export default function Trade() {
       active = false;
       clearInterval(interval);
     };
-  }, [sosoClient]);
+  }, [sosoClient, settings.sosoValueApiKey, settings.sosoSet]);
 
   // Load account data
   const loadAccountData = React.useCallback(async () => {
+    if ((!settings.sodexApiKey || !settings.sodexSecretKey) && !settings.sodexSet) {
+      return;
+    }
     try {
       const [posList, histList, balSummary] = await Promise.all([
         sodexClient.getPositions(),
@@ -136,22 +142,13 @@ export default function Trade() {
     } catch (err) {
       console.error(err);
     }
-  }, [sodexClient]);
+  }, [sodexClient, settings.sodexApiKey, settings.sodexSecretKey, settings.sodexSet]);
 
   React.useEffect(() => {
     loadAccountData();
     const interval = setInterval(loadAccountData, 5000);
     return () => clearInterval(interval);
   }, [loadAccountData]);
-
-  if ((!settings.sodexApiKey || !settings.sodexSecretKey) && !settings.sodexSet) {
-    return (
-      <ApiKeyWarning 
-        title="SoDEX API Keys Required"
-        description="Active SoDEX API keys and secret signatures are required to route custom orders, place spot trades, and manage perpetual margin contracts. Please configure them to continue."
-      />
-    );
-  }
 
   // Place trade
   const handlePlaceOrder = async () => {
@@ -252,6 +249,15 @@ export default function Trade() {
 
     return { marginAdvice, suggestion };
   }, [sizeInput, priceInput, currentAssetPrice, tradeType, side, leverage, balances]);
+
+  if ((!settings.sodexApiKey || !settings.sodexSecretKey) && !settings.sodexSet) {
+    return (
+      <ApiKeyWarning 
+        title="SoDEX API Keys Required"
+        description="Active SoDEX API keys and secret signatures are required to route custom orders, place spot trades, and manage perpetual margin contracts. Please configure them to continue."
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 pt-4 pb-12">

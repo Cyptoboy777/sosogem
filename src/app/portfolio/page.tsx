@@ -31,19 +31,13 @@ export default function Portfolio() {
     [settings.sodexApiKey, settings.sodexSecretKey]
   );
 
-  if ((!settings.sodexApiKey || !settings.sodexSecretKey) && !settings.sodexSet) {
-    return (
-      <ApiKeyWarning 
-        title="SoDEX API Credentials Required"
-        description="Active SoDEX API keys and secret signatures are required to fetch your wallet balance sheet, track active positions, and monitor assets. Please configure them to continue."
-      />
-    );
-  }
-
   React.useEffect(() => {
     let active = true;
 
     async function loadPortfolio() {
+      if ((!settings.sodexApiKey || !settings.sodexSecretKey) && !settings.sodexSet) {
+        return;
+      }
       try {
         const balances = await sodexClient.getBalances();
         const positions = await sodexClient.getPositions();
@@ -100,7 +94,16 @@ export default function Portfolio() {
       active = false;
       clearInterval(interval);
     };
-  }, [sodexClient]);
+  }, [sodexClient, settings.sodexApiKey, settings.sodexSecretKey, settings.sodexSet]);
+
+  if ((!settings.sodexApiKey || !settings.sodexSecretKey) && !settings.sodexSet) {
+    return (
+      <ApiKeyWarning 
+        title="SoDEX API Credentials Required"
+        description="Active SoDEX API keys and secret signatures are required to fetch your wallet balance sheet, track active positions, and monitor assets. Please configure them to continue."
+      />
+    );
+  }
 
   if (loading) {
     return (
