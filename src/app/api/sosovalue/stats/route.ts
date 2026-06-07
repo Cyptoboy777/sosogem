@@ -1,28 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-async function getLiveBinancePrices() {
-  try {
-    const res = await fetch('https://api.binance.com/api/v3/ticker/price');
-    if (!res.ok) throw new Error('Binance price fetch failed');
-    const data = await res.json();
-    const btc = data.find((item: any) => item.symbol === 'BTCUSDT');
-    const eth = data.find((item: any) => item.symbol === 'ETHUSDT');
-    const sol = data.find((item: any) => item.symbol === 'SOLUSDT');
-    return {
-      BTC: btc ? parseFloat(btc.price) : 68650,
-      ETH: eth ? parseFloat(eth.price) : 3792,
-      SOL: sol ? parseFloat(sol.price) : 179.8
-    };
-  } catch (error) {
-    console.error('Failed to fetch live prices from Binance:', error);
-    return {
-      BTC: 68650,
-      ETH: 3792,
-      SOL: 179.8
-    };
-  }
-}
-
 export async function GET(req: NextRequest) {
   let auth = req.headers.get('Authorization') || '';
   let apiKey = '';
@@ -33,44 +10,91 @@ export async function GET(req: NextRequest) {
     apiKey = process.env.SOSOVALUE_API_KEY || '';
   }
 
-  const isPlaceholder = !apiKey || apiKey === 'your_sosovalue_api_key_here' || apiKey === 'your_sosovalue_api_key';
-  const livePrices = await getLiveBinancePrices();
+  // Fetch prices from SoDEX tickers to maintain alignment
+  let btcPrice = 62840;
+  let btcChange = 2.69;
+  let ethPrice = 1639.8;
+  let ethChange = 3.81;
+  let solPrice = 65.88;
+  let solChange = 4.25;
 
-  const MOCK_STATS = {
-    btcPrice: livePrices.BTC,
-    btcChange24h: 3.42,
-    ethPrice: livePrices.ETH,
-    ethChange24h: 2.15,
-    solPrice: livePrices.SOL,
-    solChange24h: 8.76,
-    totalMarketCap: 2540000000000,
-    marketCapChange24h: 2.85,
-    etfNetInflow: 242300000,
-    etfEthInflow: 48900000
-  };
-
-  if (isPlaceholder) {
-    return NextResponse.json(MOCK_STATS);
-  }
-  
   try {
-    const res = await fetch('https://openapi.sosovalue.com/api/v1/openapi/pub/etf/btc/stats', {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-    });
-    
-    if (!res.ok) {
-      console.warn(`SoSoValue stats API responded with status ${res.status}. Falling back to mock data.`);
-      return NextResponse.json(MOCK_STATS);
+    const sodexRes = await fetch('https://mainnet-gw.sodex.dev/api/v1/spot/markets/tickers');
+    if (sodexRes.ok) {
+      const tickers = await sodexRes.json();
+      const btcTicker = tickers.find((item: any) => item.symbol === 'vBTC_vUSDC');
+      const ethTicker = tickers.find((item: any) => item.symbol === 'vETH_vUSDC');
+      const solTicker = tickers.find((item: any) => item.symbol === 'vSOL_vUSDC');
+      if (btcTicker) {
+        btcPrice = parseFloat(btcTicker.lastPx);
+        btcChange = parseFloat(btcTicker.changePct);
+      }
+      if (ethTicker) {
+        ethPrice = parseFloat(ethTicker.lastPx);
+        ethChange = parseFloat(ethTicker.changePct);
+      }
+      if (solTicker) {
+        solPrice = parseFloat(solTicker.lastPx);
+        solChange = parseFloat(solTicker.changePct);
+      }
     }
-    
-    const data = await res.json();
-    return NextResponse.json(data);
-  } catch (error: any) {
-    console.error('SoSoValue stats fetch error. Falling back to mock data:', error);
-    return NextResponse.json(MOCK_STATS);
+  } catch (error) {
+    console.error('Failed to fetch prices from SoDEX tickers in stats route:', error);
   }
-}
 
+  // Fetch real ETF flows using x-soso-api-key header
+  let etfNetInflow = 242300000;
+  let etfEthInflow = 48900000;
+
+  if (apiKey && apiKey !== 'your_sosovalue_api_key_here' && apiKey !== 'your_sosovalue_api_key') {
+    try {
+      const btcEtfRes = await fetch('https://openapi.sosovalue.com/openapi/v1/etfs/summary-history?symbol=BTC&country_code=US', {
+        headers: {
+          'x-soso-api-key': apiKey,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (btcEtfRes.ok) {
+        const btcEtfData = await btcEtfRes.json();
+        if (btcEtfData.code === 0 && btcEtfData.data && btcEtfData.data.length > 0) {
+          etfNetInflow = btcEtfData.data[0].total_net_inflow;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch real BTC ETF inflows:', err);
+    }
+
+    try {
+      const ethEtfRes = await fetch('https://openapi.sosovalue.com/openapi/v1/etfs/summary-history?symbol=ETH&country_code=US', {
+        headers: {
+          'x-soso-api-key': apiKey,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (ethEtfRes.ok) {
+        const ethEtfData = await ethEtfRes.json();
+        if (ethEtfData.code === 0 && ethEtfData.data && ethEtfData.data.length > 0) {
+          etfEthInflow = ethEtfData.data[0].total_net_inflow;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch real ETH ETF inflows:', err);
+    }
+  }
+
+  const totalMarketCap = 2500000000000 * (btcPrice / 62840);
+  const marketCapChange24h = btcChange;
+
+  return NextResponse.json({
+    btcPrice,
+    btcChange24h: btcChange,
+    ethPrice,
+    ethChange24h: ethChange,
+    solPrice,
+    solChange24h: solChange,
+    totalMarketCap,
+    marketCapChange24h,
+    etfNetInflow,
+    etfEthInflow
+  });
+}

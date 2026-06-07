@@ -1,24 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-async function getLiveBinancePrices() {
+async function getLiveSodexPrices() {
   try {
-    const res = await fetch('https://api.binance.com/api/v3/ticker/price');
-    if (!res.ok) throw new Error('Binance price fetch failed');
+    const res = await fetch('https://mainnet-gw.sodex.dev/api/v1/spot/markets/tickers', {
+      next: { revalidate: 5 }
+    });
+    if (!res.ok) throw new Error('SoDEX tickers fetch failed');
     const data = await res.json();
-    const btc = data.find((item: any) => item.symbol === 'BTCUSDT');
-    const eth = data.find((item: any) => item.symbol === 'ETHUSDT');
-    const sol = data.find((item: any) => item.symbol === 'SOLUSDT');
+    const btc = data.find((item: any) => item.symbol === 'vBTC_vUSDC');
+    const eth = data.find((item: any) => item.symbol === 'vETH_vUSDC');
+    const sol = data.find((item: any) => item.symbol === 'vSOL_vUSDC');
     return {
-      BTC: btc ? parseFloat(btc.price) : 68650,
-      ETH: eth ? parseFloat(eth.price) : 3792,
-      SOL: sol ? parseFloat(sol.price) : 179.8
+      BTC: btc ? parseFloat(btc.lastPx) : 62840,
+      ETH: eth ? parseFloat(eth.lastPx) : 1639.8,
+      SOL: sol ? parseFloat(sol.lastPx) : 65.88,
+      BTC_change: btc ? parseFloat(btc.changePct) : 2.69,
+      ETH_change: eth ? parseFloat(eth.changePct) : 3.81,
+      SOL_change: sol ? parseFloat(sol.changePct) : 4.25
     };
   } catch (error) {
-    console.error('Failed to fetch live prices from Binance:', error);
+    console.error('Failed to fetch live prices from SoDEX:', error);
     return {
-      BTC: 68650,
-      ETH: 3792,
-      SOL: 179.8
+      BTC: 62840,
+      ETH: 1639.8,
+      SOL: 65.88,
+      BTC_change: 2.69,
+      ETH_change: 3.81,
+      SOL_change: 4.25
     };
   }
 }
@@ -29,7 +37,7 @@ export async function GET(req: NextRequest) {
   const sign = req.headers.get('X-API-Sign') || '0x01mockedsignature...';
 
   const isPlaceholder = !apiKey || apiKey === 'your_sodex_api_key_here' || apiKey === 'your_sodex_api_key';
-  const livePrices = await getLiveBinancePrices();
+  const livePrices = await getLiveSodexPrices();
 
   const btcAmount = 0.085;
   const ethAmount = 0.65;
@@ -50,7 +58,7 @@ export async function GET(req: NextRequest) {
         amount: btcAmount,
         price: livePrices.BTC,
         value: btcVal,
-        change24h: 3.42,
+        change24h: livePrices.BTC_change,
         allocation: (btcVal / totalValue) * 100
       },
       {
@@ -59,7 +67,7 @@ export async function GET(req: NextRequest) {
         amount: ethAmount,
         price: livePrices.ETH,
         value: ethVal,
-        change24h: 2.15,
+        change24h: livePrices.ETH_change,
         allocation: (ethVal / totalValue) * 100
       },
       {
@@ -68,7 +76,7 @@ export async function GET(req: NextRequest) {
         amount: solAmount,
         price: livePrices.SOL,
         value: solVal,
-        change24h: 8.76,
+        change24h: livePrices.SOL_change,
         allocation: (solVal / totalValue) * 100
       }
     ]
@@ -94,10 +102,48 @@ export async function GET(req: NextRequest) {
     }
     
     const data = await res.json();
-    return NextResponse.json(data);
+    // Map the real balances returned to use the real prices from the tickers
+    let parsedAssets: any[] = [];
+    let calculatedTotalValue = 0;
+
+    if (data && Array.isArray(data)) {
+      data.forEach((item: any) => {
+        const symbol = item.currency ? item.currency.replace(/^v/, '') : '';
+        const balance = parseFloat(item.balance || '0');
+        if (balance > 0 && ['BTC', 'ETH', 'SOL'].includes(symbol)) {
+          const price = livePrices[symbol as keyof typeof livePrices] as number;
+          const change = livePrices[`${symbol}_change` as keyof typeof livePrices] as number;
+          const val = balance * price;
+          calculatedTotalValue += val;
+          parsedAssets.push({
+            symbol,
+            name: symbol === 'BTC' ? 'Bitcoin' : symbol === 'ETH' ? 'Ethereum' : 'Solana',
+            amount: balance,
+            price,
+            value: val,
+            change24h: change,
+            allocation: 0 // Will recalculate below
+          });
+        }
+      });
+    }
+
+    if (parsedAssets.length === 0) {
+      // Return mock data if account is empty/new
+      return NextResponse.json(MOCK_BALANCE);
+    }
+
+    parsedAssets = parsedAssets.map(asset => ({
+      ...asset,
+      allocation: (asset.value / calculatedTotalValue) * 100
+    }));
+
+    return NextResponse.json({
+      totalValue: calculatedTotalValue,
+      assets: parsedAssets
+    });
   } catch (error: any) {
     console.error('SoDEX balance fetch error. Falling back to mock data:', error);
     return NextResponse.json(MOCK_BALANCE);
   }
 }
-
