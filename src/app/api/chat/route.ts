@@ -34,11 +34,55 @@ A Google Gemini API key is required to query live metrics and generate AI-driven
       });
     }
 
-    // Initialize real Google Generative AI
+    // 1. Pre-fetch SoSoValue & SoDEX context in parallel to minimize latency
+    let marketStats = null;
+    let cryptoNews = null;
+    let coinDetails = null;
+    let accountBalances = null;
+    let activePositions = null;
+
+    try {
+      const results = await Promise.allSettled([
+        sosoClient.getMarketStats(),
+        sosoClient.getNews(),
+        sosoClient.getCoins(),
+        sodexKey && sodexSecret ? sodexClient.getBalances() : Promise.resolve(null),
+        sodexKey && sodexSecret ? sodexClient.getPositions() : Promise.resolve(null)
+      ]);
+
+      if (results[0].status === 'fulfilled') marketStats = results[0].value;
+      if (results[1].status === 'fulfilled') cryptoNews = results[1].value;
+      if (results[2].status === 'fulfilled') coinDetails = results[2].value;
+      if (results[3].status === 'fulfilled') accountBalances = results[3].value;
+      if (results[4].status === 'fulfilled') activePositions = results[4].value;
+    } catch (e) {
+      console.error("Error pre-fetching context:", e);
+    }
+
+    // 2. Build dynamic system instruction with real-time data
+    const dynamicSystemInstruction = `${GEMINI_SYSTEM_INSTRUCTION}
+
+=== REAL-TIME CONTEXT FROM SOSOVALUE AND SODEX ===
+Current Server Time: ${new Date().toISOString()}
+- Market Statistics & ETF Flows: ${JSON.stringify(marketStats)}
+- Latest Crypto News & Sentiment (SoSoValue): ${JSON.stringify(cryptoNews)}
+- Coin Details (BTC, ETH, SOL, DOGE): ${JSON.stringify(coinDetails)}
+- SoDEX User Balances: ${JSON.stringify(accountBalances)}
+- SoDEX User Active Perpetual Positions: ${JSON.stringify(activePositions)}
+==================================================
+
+Guidelines on utilizing the provided real-time context:
+1. Refer to the real-time figures above for all crypto prices, 24h percentage changes, and Spot ETF inflows. Never make up prices or invent inflows.
+2. If queried about speculative projects like "latest Solana memecoins with potential" or "Ecosystem coins", provide a high-caliber, data-backed synthesis using the current SOL price trend and latest SoSoValue news sentiment. Highlight major established ecosystem tokens such as BONK and WIF as examples, explain their market cap sizes, their correlation to SOL's volume/price, and provide an objective risk warning (e.g., liquidity constraints, pump.fun velocity). NEVER respond with a refusal that you cannot identify them. Instead, deliver the most premium report possible using the active context.
+3. If asked about user balances or positions, read from the SoDEX User Balances and SoDEX User Active Perpetual Positions above. Give a precise breakdown of the assets, valuation in USD, entry prices, mark prices, leverage, and unrealized PnL.
+4. You are an autonomous agent capable of executing spot and perp orders via the SoDEX Router when the user requests it. If the user commands a trade, call the execute_trade tool.
+`;
+
+    // 3. Initialize Gemini model with the dynamic system prompt
     const genAI = new GoogleGenerativeAI(geminiKey);
-    const model = genAI.getGenerativeModel({
+    let model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
-      systemInstruction: GEMINI_SYSTEM_INSTRUCTION,
+      systemInstruction: dynamicSystemInstruction,
       tools: GEMINI_TOOLS as any
     });
 
@@ -48,14 +92,49 @@ A Google Gemini API key is required to query live metrics and generate AI-driven
       parts: [{ text: m.content }],
     }));
 
-    let result = await model.generateContent({
-      contents,
-    });
+    console.log("Incoming messages to chat API:", JSON.stringify(messages, null, 2));
 
-    let response = await result.response;
-    let functionCalls = response.functionCalls() || [];
+    // 4. Run multi-step function calling execution loop
+    let loopCount = 0;
+    const maxLoops = 5;
+    let finalContent = "";
+    let useFallback = false;
 
-    if (functionCalls.length > 0) {
+    while (loopCount < maxLoops) {
+      let response;
+      let functionCalls;
+
+      try {
+        const result = await model.generateContent({
+          contents,
+        });
+
+        response = await result.response;
+        functionCalls = response.functionCalls() || [];
+      } catch (err: any) {
+        console.error("Gemini generation error:", err);
+        if (!useFallback) {
+          console.warn("Retrying with gemini-1.5-flash fallback...");
+          useFallback = true;
+          model = genAI.getGenerativeModel({
+            model: 'gemini-1.5-flash',
+            systemInstruction: dynamicSystemInstruction,
+            tools: GEMINI_TOOLS as any
+          });
+          continue; // Retry this loop iteration with the fallback model
+        }
+        throw err;
+      }
+
+      console.log(`Gemini loop ${loopCount} function calls:`, JSON.stringify(functionCalls, null, 2));
+
+      if (functionCalls.length === 0) {
+        // No function calls, this is the final text response from the model
+        finalContent = response.text();
+        break;
+      }
+
+      // We have function calls, execute them and gather responses
       const functionResponseParts = [];
 
       for (const call of functionCalls) {
@@ -93,37 +172,29 @@ A Google Gemini API key is required to query live metrics and generate AI-driven
         });
       }
 
-      // Append model parts containing functionCalls
-      const modelParts = functionCalls.map((c: any) => ({
-        functionCall: c
-      }));
-
+      // Update the Gemini conversation history
       contents.push({
         role: 'model',
-        parts: modelParts
+        parts: functionCalls.map((c: any) => ({
+          functionCall: c
+        }))
       });
 
-      // Append function response parts
       contents.push({
         role: 'function',
         parts: functionResponseParts
       });
 
-      // Generate content again with function results
-      const finalResult = await model.generateContent({
-        contents
-      });
+      loopCount++;
+    }
 
-      const finalResponse = await finalResult.response;
-      return NextResponse.json({
-        role: 'model',
-        content: finalResponse.text(),
-      });
+    if (loopCount >= maxLoops && !finalContent) {
+      finalContent = "Tool execution loop limit exceeded. Here is the latest state of tool responses: " + JSON.stringify(contents[contents.length - 1]);
     }
 
     return NextResponse.json({
       role: 'model',
-      content: response.text(),
+      content: finalContent,
     });
   } catch (error: any) {
     console.error('Gemini Route Error:', error);
