@@ -1,18 +1,17 @@
 import { MarketStats, CoinData, NewsItem } from '@/types';
 
-// Endpoints are proxied via Next.js API route handlers to avoid exposing client keys
-const SOSOVALUE_API_URL = '/api/sosovalue';
-
 export class SoSoValueClient {
   private apiKey: string;
+  private baseUrl: string;
 
-  constructor(apiKey: string = '') {
+  constructor(apiKey: string = '', baseUrl: string = '/api/sosovalue') {
     this.apiKey = apiKey;
+    this.baseUrl = baseUrl;
   }
 
   // Get active price & market cap stats
   async getMarketStats(): Promise<MarketStats> {
-    const res = await fetch(`${SOSOVALUE_API_URL}/stats`, {
+    const res = await fetch(`${this.baseUrl}/stats`, {
       headers: { 
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json'
@@ -29,7 +28,7 @@ export class SoSoValueClient {
 
   // Fetch full details of major tokens
   async getCoins(): Promise<CoinData[]> {
-    const res = await fetch(`${SOSOVALUE_API_URL}/coins`, {
+    const res = await fetch(`${this.baseUrl}/coins`, {
       headers: { 
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json'
@@ -46,7 +45,7 @@ export class SoSoValueClient {
 
   // Get live crypto news and sentiment
   async getNews(): Promise<NewsItem[]> {
-    const res = await fetch(`${SOSOVALUE_API_URL}/news`, {
+    const res = await fetch(`${this.baseUrl}/news`, {
       headers: { 
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json'

@@ -1,21 +1,20 @@
 import { AssetPosition, PortfolioAsset } from '@/types';
 
-const SODEX_SPOT_URL = 'https://mainnet-gw.sodex.dev/api/v1/spot';
-const SODEX_PERPS_URL = 'https://mainnet-gw.sodex.dev/api/v1/perps';
-
 export class SodexSDK {
   private apiKey: string;
   private secretKey: string;
+  private baseUrl: string;
 
-  constructor(apiKey: string = '', secretKey: string = '') {
+  constructor(apiKey: string = '', secretKey: string = '', baseUrl: string = '/api/sodex') {
     this.apiKey = apiKey;
     this.secretKey = secretKey;
+    this.baseUrl = baseUrl;
   }
 
   // Get current account balances
   async getBalances(): Promise<{ totalValue: number; assets: PortfolioAsset[] }> {
     const nonce = Date.now().toString();
-    const res = await fetch('/api/sodex/balance', {
+    const res = await fetch(`${this.baseUrl}/balance`, {
       headers: {
         'X-API-Key': this.apiKey,
         'X-API-Nonce': nonce,
@@ -34,7 +33,7 @@ export class SodexSDK {
   // Get active leveraged positions
   async getPositions(): Promise<AssetPosition[]> {
     const nonce = Date.now().toString();
-    const res = await fetch('/api/sodex/positions', {
+    const res = await fetch(`${this.baseUrl}/positions`, {
       headers: {
         'X-API-Key': this.apiKey,
         'X-API-Nonce': nonce,
@@ -52,7 +51,7 @@ export class SodexSDK {
 
   // Get recent trade execution logs
   async getTradeHistory(): Promise<any[]> {
-    const res = await fetch('/api/sodex/history', {
+    const res = await fetch(`${this.baseUrl}/history`, {
       headers: { 
         'X-API-Key': this.apiKey,
         'Content-Type': 'application/json'
@@ -76,7 +75,7 @@ export class SodexSDK {
     orderType: 'market' | 'limit';
   }): Promise<{ success: boolean; txHash: string; orderId: string; error?: string }> {
     try {
-      const res = await fetch('/api/sodex/orders', {
+      const res = await fetch(`${this.baseUrl}/orders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -128,7 +127,7 @@ export class SodexSDK {
     orderType: 'market' | 'limit';
   }): Promise<{ success: boolean; txHash: string; orderId: string; error?: string }> {
     try {
-      const res = await fetch('/api/sodex/orders', {
+      const res = await fetch(`${this.baseUrl}/orders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -172,9 +171,8 @@ export class SodexSDK {
 
   // Close position
   async closePosition(positionId: string): Promise<boolean> {
-    // In live execution, closes open perp contract by routing offset order
     const nonce = Date.now().toString();
-    const res = await fetch(`/api/sodex/positions/close`, {
+    const res = await fetch(`${this.baseUrl}/positions/close`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

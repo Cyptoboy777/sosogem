@@ -17,8 +17,13 @@ export async function POST(req: NextRequest) {
 
     const sandbox = !geminiKey;
 
-    const sosoClient = new SoSoValueClient(sosoKey);
-    const sodexClient = new SodexSDK(sodexKey, sodexSecret);
+    // Build absolute base URL for server-side fetches to avoid relative URL errors
+    const protocol = req.headers.get('x-forwarded-proto') || 'http';
+    const host = req.headers.get('host') || 'localhost:3000';
+    const baseUrl = `${protocol}://${host}`;
+
+    const sosoClient = new SoSoValueClient(sosoKey, `${baseUrl}/api/sosovalue`);
+    const sodexClient = new SodexSDK(sodexKey, sodexSecret, `${baseUrl}/api/sodex`);
 
     if (sandbox) {
       return NextResponse.json({
