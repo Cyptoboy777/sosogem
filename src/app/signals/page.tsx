@@ -98,6 +98,65 @@ export default function Signals() {
     [settings.sodexApiKey, settings.sodexSecretKey]
   );
 
+  React.useEffect(() => {
+    let active = true;
+    async function loadLivePrices() {
+      try {
+        const res = await fetch('/api/sosovalue/coins');
+        if (!res.ok) throw new Error('Failed to fetch coin prices');
+        const coinData = await res.json();
+        if (!active) return;
+        
+        setSignals(prev => prev.map(sig => {
+          const coin = coinData.find((c: any) => c.symbol === sig.symbol);
+          if (coin) {
+            const price = coin.price;
+            const isBuy = sig.direction === 'BUY';
+            
+            let targetMult = 1.0924;
+            let slMult = 0.9496;
+            
+            if (sig.symbol === 'BTC') {
+              targetMult = 1.0568;
+              slMult = 0.9665;
+            } else if (sig.symbol === 'ETH') {
+              targetMult = 1.0818;
+              slMult = 0.9631;
+            } else if (sig.symbol === 'DOGE') {
+              targetMult = 0.8734;
+              slMult = 1.0696;
+            }
+            
+            const entryPrice = price;
+            const targetPrice = parseFloat((price * targetMult).toFixed(sig.symbol === 'DOGE' ? 4 : 2));
+            const stopLoss = parseFloat((price * slMult).toFixed(sig.symbol === 'DOGE' ? 4 : 2));
+            
+            const diffPct = ((targetPrice - entryPrice) / entryPrice) * 100;
+            const upside = (isBuy ? '+' : '-') + Math.abs(diffPct).toFixed(2) + '%';
+            
+            return {
+              ...sig,
+              entryPrice,
+              targetPrice,
+              stopLoss,
+              upside
+            };
+          }
+          return sig;
+        }));
+      } catch (err) {
+        console.error('Failed to update signal prices:', err);
+      }
+    }
+    
+    loadLivePrices();
+    const interval = setInterval(loadLivePrices, 8000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   if ((!settings.sodexApiKey || !settings.sodexSecretKey) && !settings.sodexSet) {
     return (
       <ApiKeyWarning 

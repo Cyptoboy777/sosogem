@@ -21,7 +21,8 @@ export async function GET(req: NextRequest) {
   try {
     const sodexRes = await fetch('https://mainnet-gw.sodex.dev/api/v1/spot/markets/tickers');
     if (sodexRes.ok) {
-      const tickers = await sodexRes.json();
+      const rootTickers = await sodexRes.json();
+      const tickers = rootTickers.data || [];
       const btcTicker = tickers.find((item: any) => item.symbol === 'vBTC_vUSDC');
       const ethTicker = tickers.find((item: any) => item.symbol === 'vETH_vUSDC');
       const solTicker = tickers.find((item: any) => item.symbol === 'vSOL_vUSDC');

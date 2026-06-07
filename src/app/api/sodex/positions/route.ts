@@ -6,7 +6,8 @@ async function getLiveSodexPrices() {
       next: { revalidate: 5 }
     });
     if (!res.ok) throw new Error('SoDEX tickers fetch failed');
-    const data = await res.json();
+    const rootData = await res.json();
+    const data = rootData.data || [];
     const btc = data.find((item: any) => item.symbol === 'vBTC_vUSDC');
     const eth = data.find((item: any) => item.symbol === 'vETH_vUSDC');
     const sol = data.find((item: any) => item.symbol === 'vSOL_vUSDC');
@@ -33,7 +34,6 @@ export async function GET(req: NextRequest) {
   const isPlaceholder = !apiKey || apiKey === 'your_sodex_api_key_here' || apiKey === 'your_sodex_api_key';
   const livePrices = await getLiveSodexPrices();
 
-  // Set entryPrice relative to the real SoDEX SOL price to avoid instant liquidation simulation
   const entryPrice = 62.50; 
   const markPrice = livePrices.SOL;
   const size = 10;
@@ -76,8 +76,6 @@ export async function GET(req: NextRequest) {
     }
     
     const data = await res.json();
-    
-    // Map real positions to inject live mark prices from SoDEX tickers
     let parsedPositions: any[] = [];
     if (data && Array.isArray(data)) {
       data.forEach((pos: any) => {

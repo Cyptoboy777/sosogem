@@ -6,7 +6,8 @@ async function getLiveSodexPrices() {
       next: { revalidate: 5 }
     });
     if (!res.ok) throw new Error('SoDEX tickers fetch failed');
-    const data = await res.json();
+    const rootData = await res.json();
+    const data = rootData.data || [];
     const btc = data.find((item: any) => item.symbol === 'vBTC_vUSDC');
     const eth = data.find((item: any) => item.symbol === 'vETH_vUSDC');
     const sol = data.find((item: any) => item.symbol === 'vSOL_vUSDC');
@@ -102,7 +103,6 @@ export async function GET(req: NextRequest) {
     }
     
     const data = await res.json();
-    // Map the real balances returned to use the real prices from the tickers
     let parsedAssets: any[] = [];
     let calculatedTotalValue = 0;
 
@@ -122,14 +122,13 @@ export async function GET(req: NextRequest) {
             price,
             value: val,
             change24h: change,
-            allocation: 0 // Will recalculate below
+            allocation: 0
           });
         }
       });
     }
 
     if (parsedAssets.length === 0) {
-      // Return mock data if account is empty/new
       return NextResponse.json(MOCK_BALANCE);
     }
 
